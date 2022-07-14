@@ -12,8 +12,12 @@
 #define ANALOGPIN A0
 
 // MQ-135
-#include "MQ135.h"
-#define RZERO 50.47
+#include <MQ135.h>
+// MQ-135 calibration
+// RZero: 3.4 | Corrected RZero: 3.8 (rounded off) (28.90 degrees / 79.00 humidity)
+#define RZERO 3.8
+// 1k ohm resistor of MQ-135
+#define RLOAD 1.0
 
 // MQ-2
 #include <MQ2.h>
@@ -33,7 +37,7 @@ unsigned long sampletime_ms = 30000;
 unsigned long lowpulseoccupancyPM25 = 0;
 
 // MQ-135
-MQ135 gasSensor = MQ135(ANALOGPIN);
+MQ135 mq135_sensor(ANALOGPIN, RZERO, RLOAD);
 
 // MQ-2
 int LPG, CO, Smoke;
@@ -96,7 +100,8 @@ void setup(){
   timeClient.setTimeOffset(28800);
 
   Firebase.begin(FIREBASE_HOST, FIREBASE_AUTH);
-  delay(20000);
+  // remove
+//  delay(20000);
 }
 
 void loop(){
@@ -110,6 +115,26 @@ void loop(){
   String date = String(currentYear) + "-" + String(currentMonth) + "-" + String(monthDay);
   String time = timeClient.getFormattedTime();
 
+   // DHT11
+   delay(1000);
+   flttemperature = dht.readTemperature();
+   flthumidity = dht.readHumidity();
+   
+   temperature = String(flttemperature);
+   humidity = String(flthumidity);
+   
+   Serial.println("Temperature: " + temperature);
+   Serial.println("Humidity: " + humidity); 
+                  
+   if(!isnan(flttemperature)){
+       String firebaseTemperature = "/DHT11/Temperature/" + date + "/" + time + "/";
+       Firebase.pushString(firebaseTemperature,temperature);        
+   }             
+   if(!isnan(flthumidity)){
+      String firebaseHumidity = "/DHT11/Humidity/" + date + "/" + time + "/";
+      Firebase.pushString(firebaseHumidity, humidity);  
+   }
+
   for(int i = 0; i < 2; i ++){
     // Channel 0
     if (i == 0){
@@ -117,14 +142,15 @@ void loop(){
       delay(1000);
       Serial.print("Value at channel 0 is: ");
       Serial.println(readMux(0));
+
+      float correctedPPM = mq135_sensor.getCorrectedPPM(flttemperature, flthumidity);
+      Serial.print("CO2:");
+      Serial.print(correctedPPM);
+      Serial.println("ppm");
       
-      float ppm = gasSensor.getPPM();
-      Serial.print("CO2 ppm value: ");
-      Serial.println(ppm);
-      
-      String CO2 = String(ppm);
+      String CO2 = String(correctedPPM);
       String firebaseCO2 = "/MQ135/CO2/" + date + "/" + time + "/";
-      
+
       Firebase.pushString(firebaseCO2, CO2);
     }
     
@@ -148,35 +174,15 @@ void loop(){
       String firebaseCO = "/MQ2/CO/" + date + "/" + time + "/";
       String firebaseSmoke = "/MQ2/Smoke/" + date + "/" + time + "/";
       
-      Serial.println("LPG Value: " + LPG);
-      Serial.println("CO Value: " + CO);
-      Serial.println("Smoke Value: " + Smoke);
+//      Serial.println("LPG Value: " + LPG);
+//      Serial.println("CO Value: " + CO);
+//      Serial.println("Smoke Value: " + Smoke);
       
       Firebase.pushString(firebaseLPG, LPG);
       Firebase.pushString(firebaseCO, CO);
       Firebase.pushString(firebaseSmoke, Smoke);
     }
   }
-
-   // DHT11
-   delay(1000);
-   flttemperature = dht.readTemperature();
-   flthumidity = dht.readHumidity();
-   
-   temperature = String(flttemperature);
-   humidity = String(flthumidity);
-   
-   Serial.println("Temperature: " + temperature);
-   Serial.println("Humidity: " + humidity); 
-                  
-   if(!isnan(flttemperature)){
-       String firebaseTemperature = "/DHT11/Temperature/" + date + "/" + time + "/";
-       Firebase.pushString(firebaseTemperature,temperature);        
-   }             
-   if(!isnan(flthumidity)){
-      String firebaseHumidity = "/DHT11/Humidity/" + date + "/" + time + "/";
-      Firebase.pushString(firebaseHumidity, humidity);  
-   }
 
   // DSM501A
   durationPM25 = pulseIn(D5, LOW);
@@ -195,8 +201,10 @@ void loop(){
     String pm25 = "/DSM501A/PM25/" +  date + "/" + time + "/";
     
     Firebase.pushString(pm25,firePM25);
-  }                    
-  delay(60000);
+  }
+  // change                    
+//  delay(60000);
+   delay(10000);
 }
 
 // Read multiplexed input
