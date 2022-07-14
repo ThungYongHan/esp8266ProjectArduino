@@ -3,6 +3,12 @@
 #include <NTPClient.h>
 #include <WiFiUdp.h>
 
+// Firebase & Wi-Fi Connection
+#define FIREBASE_HOST "group-project-esp8266-default-rtdb.asia-southeast1.firebasedatabase.app"
+#define FIREBASE_AUTH "NKH6PeDAccfhdILOG7kcZgVvXOyjWzmm7YVDfvpQ"
+#define WIFI_SSID "POCO X3 Pro"
+#define WIFI_PASSWORD "yonghanpswd"
+
 #define ANALOGPIN A0
 
 // MQ-135
@@ -41,14 +47,9 @@ float flthumidity;
 String temperature;
 String humidity;
 
+// Internet date and time
 WiFiUDP ntpUDP;
 NTPClient timeClient(ntpUDP, "pool.ntp.org");
-
-// Firebase & Wi-Fi Connection
-#define FIREBASE_HOST "group-project-esp8266-default-rtdb.asia-southeast1.firebasedatabase.app"
-#define FIREBASE_AUTH "NKH6PeDAccfhdILOG7kcZgVvXOyjWzmm7YVDfvpQ"
-#define WIFI_SSID "POCO X3 Pro"
-#define WIFI_PASSWORD "yonghanpswd"
 
 //Multiplexer control pins
 int s0 = D0;
@@ -64,7 +65,7 @@ void setup(){
   pinMode(D5,INPUT);
   starttime = millis(); 
 
-  // Multiplexer
+  // Multiplexer digital pins
   pinMode(s0, OUTPUT); 
   pinMode(s1, OUTPUT); 
   pinMode(s2, OUTPUT); 
@@ -76,7 +77,7 @@ void setup(){
   
   Serial.begin(9600);
 
-  // Connect to wifi.
+  // Connect to wifi
   WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
   Serial.print("connecting");
   while (WiFi.status() != WL_CONNECTED) {
@@ -87,10 +88,11 @@ void setup(){
   Serial.print("connected: ");
   Serial.println(WiFi.localIP());
 
-  // necessary to avoid NaN readings
+  // Necessary to avoid NaN readings
   dht.begin();          
   
   timeClient.begin();
+  // GMT-8
   timeClient.setTimeOffset(28800);
 
   Firebase.begin(FIREBASE_HOST, FIREBASE_AUTH);
@@ -98,6 +100,7 @@ void setup(){
 }
 
 void loop(){
+  // Get latest Internet date and time
   timeClient.update();
   time_t epochTime = timeClient.getEpochTime();
   struct tm *ptm = gmtime ((time_t *)&epochTime);
@@ -108,8 +111,9 @@ void loop(){
   String time = timeClient.getFormattedTime();
 
   for(int i = 0; i < 2; i ++){
-    //MQ-135
+    // Channel 0
     if (i == 0){
+      //MQ-135
       delay(1000);
       Serial.print("Value at channel 0 is: ");
       Serial.println(readMux(0));
@@ -124,8 +128,9 @@ void loop(){
       Firebase.pushString(firebaseCO2, CO2);
     }
     
-    //MQ-2
+    // Channel 1
     if (i == 1){
+      //MQ-2
       delay(1000);
       Serial.print("Value at channel 1 is: ");
       Serial.println(readMux(1));
