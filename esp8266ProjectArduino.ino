@@ -221,8 +221,10 @@ int readMux(int channel){
 
 // Calculate DSM501A readings
 float calculateConcentration(long lowpulseInMicroSeconds, long durationinSeconds){
-  float ratio = (lowpulseInMicroSeconds/1000000.0)/30.0*100.0; //Calculate the ratio
-  float concentration = 0.001915 * pow(ratio,2) + 0.09522 * ratio - 0.04884;//Calculate the mg/m3
+  //Calculate the ratio
+  float ratio = (lowpulseInMicroSeconds/1000000.0)/30.0*100.0; 
+  //Calculate the mg/m3
+  float concentration = 0.001915 * pow(ratio,2) + 0.09522 * ratio - 0.04884;
   Serial.print("lowpulseoccupancy:");
   Serial.print(lowpulseInMicroSeconds);
   String firelowpulse = String(lowpulseInMicroSeconds);
