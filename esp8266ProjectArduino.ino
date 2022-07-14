@@ -1,15 +1,27 @@
+// Wi-Fi and Firebase connection
 #include <ESP8266WiFi.h>
 #include <FirebaseArduino.h>
-#include <NTPClient.h>
-#include <WiFiUdp.h>
-
-// Firebase and Wi-Fi connection
-#define FIREBASE_HOST "group-project-esp8266-default-rtdb.asia-southeast1.firebasedatabase.app"
-#define FIREBASE_AUTH "NKH6PeDAccfhdILOG7kcZgVvXOyjWzmm7YVDfvpQ"
 #define WIFI_SSID "POCO X3 Pro"
 #define WIFI_PASSWORD "yonghanpswd"
+#define FIREBASE_HOST "group-project-esp8266-default-rtdb.asia-southeast1.firebasedatabase.app"
+#define FIREBASE_AUTH "NKH6PeDAccfhdILOG7kcZgVvXOyjWzmm7YVDfvpQ"
+
+// Internet date and time
+#include <WiFiUdp.h>
+#include <NTPClient.h>
+WiFiUDP ntpUDP;
+NTPClient timeClient(ntpUDP, "pool.ntp.org");
 
 #define ANALOGPIN A0
+
+//DHT-11
+#include <Adafruit_Sensor.h>
+#include <DHT.h>
+#define DHT11PIN D4
+#define DHTTYPE DHT11
+DHT dht11(DHT11PIN,DHTTYPE);  
+float flttemperature, flthumidity;
+String temperature, humidity;
 
 // MQ-135
 #include <MQ135.h>
@@ -18,41 +30,23 @@
 #define RZERO 3.8
 // 1k ohm resistor of MQ-135
 #define RLOAD 1.0
+MQ135 mq135(ANALOGPIN, RZERO, RLOAD);
+float fltCO2;
+String CO2;
 
 // MQ-2
 #include <MQ2.h>
-
-//DHT-11
-#include <Adafruit_Sensor.h>
-#include <DHT.h>
-#define DHTTYPE DHT11
-#define DHTPIN D4
+MQ2 mq2(ANALOGPIN);
+String LPG, CO, Smoke; 
 
 //DSM501A
+#define DSM501APIN D5
 byte buff[2];
 unsigned long durationPM25;
 unsigned long starttime;
 unsigned long endtime;
 unsigned long sampletime_ms = 30000;
 unsigned long lowpulseoccupancyPM25 = 0;
-
-// MQ-135
-MQ135 mq135_sensor(ANALOGPIN, RZERO, RLOAD);
-float fltCO2;
-String CO2;
-
-// MQ-2
-MQ2 mq2(ANALOGPIN);
-int LPG, CO, Smoke;
-
-// DHT-11
-DHT dht(DHTPIN,DHTTYPE);  
-float flttemperature, flthumidity;
-String temperature, humidity;
-
-// Internet date and time
-WiFiUDP ntpUDP;
-NTPClient timeClient(ntpUDP, "pool.ntp.org");
 
 //Multiplexer control pins
 int s0 = D0;
@@ -65,7 +59,7 @@ int SIG_pin = ANALOGPIN;
 
 void setup(){
   // DSM501A
-  pinMode(D5,INPUT);
+  pinMode(DSM501APIN,INPUT);
   starttime = millis(); 
 
   // Multiplexer digital pins
@@ -92,7 +86,7 @@ void setup(){
   Serial.println(WiFi.localIP());
 
   // Necessary to avoid NaN readings
-  dht.begin();          
+  dht11.begin();          
   
   timeClient.begin();
   // GMT-8
@@ -115,8 +109,8 @@ void loop(){
 
    // DHT11
    delay(1000);
-   flttemperature = dht.readTemperature();
-   flthumidity = dht.readHumidity();
+   flttemperature = dht11.readTemperature();
+   flthumidity = dht11.readHumidity();
    temperature = String(flttemperature);
    humidity = String(flthumidity);
 
@@ -140,7 +134,7 @@ void loop(){
       Serial.print("Value at channel 0 is: ");
       Serial.println(readMux(0));
 
-      fltCO2 = mq135_sensor.getCorrectedPPM(flttemperature, flthumidity);
+      fltCO2 = mq135.getCorrectedPPM(flttemperature, flthumidity);
       CO2 = String(fltCO2);
       
       Serial.print("CO2:");
@@ -160,13 +154,10 @@ void loop(){
       Serial.println(readMux(1));
       
       float* values= mq2.read(true);
-      LPG = mq2.readLPG();
-      CO = mq2.readCO();
-      Smoke = mq2.readSmoke();
       
-      String LPG = String(mq2.readLPG());
-      String CO = String(mq2.readCO());
-      String Smoke = String(mq2.readSmoke());
+      LPG = String(mq2.readLPG());
+      CO = String(mq2.readCO());
+      Smoke = String(mq2.readSmoke());
       
       String firebaseLPG = "/MQ2/LPG/" + date + "/" + time + "/";
       String firebaseCO = "/MQ2/CO/" + date + "/" + time + "/";
