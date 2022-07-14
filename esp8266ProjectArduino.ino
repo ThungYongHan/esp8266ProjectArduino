@@ -38,18 +38,18 @@ unsigned long lowpulseoccupancyPM25 = 0;
 
 // MQ-135
 MQ135 mq135_sensor(ANALOGPIN, RZERO, RLOAD);
+float fltCO2;
+String CO2;
 
 // MQ-2
+MQ2 mq2(ANALOGPIN);
 int LPG, CO, Smoke;
-int mq2_Pin = ANALOGPIN;
-MQ2 mq2(mq2_Pin);
 
 // DHT-11
 DHT dht(DHTPIN,DHTTYPE);  
-float flttemperature;
-float flthumidity;
-String temperature;
-String humidity;
+float flttemperature, flthumidity;
+String temperature, humidity;
+
 
 // Internet date and time
 WiFiUDP ntpUDP;
@@ -100,8 +100,7 @@ void setup(){
   timeClient.setTimeOffset(28800);
 
   Firebase.begin(FIREBASE_HOST, FIREBASE_AUTH);
-  // remove
-//  delay(20000);
+  delay(20000);
 }
 
 void loop(){
@@ -119,10 +118,9 @@ void loop(){
    delay(1000);
    flttemperature = dht.readTemperature();
    flthumidity = dht.readHumidity();
-   
    temperature = String(flttemperature);
    humidity = String(flthumidity);
-   
+
    Serial.println("Temperature: " + temperature);
    Serial.println("Humidity: " + humidity); 
                   
@@ -143,12 +141,13 @@ void loop(){
       Serial.print("Value at channel 0 is: ");
       Serial.println(readMux(0));
 
-      float correctedPPM = mq135_sensor.getCorrectedPPM(flttemperature, flthumidity);
+      fltCO2 = mq135_sensor.getCorrectedPPM(flttemperature, flthumidity);
+      CO2 = String(fltCO2);
+      
       Serial.print("CO2:");
-      Serial.print(correctedPPM);
+      Serial.print(CO2);
       Serial.println("ppm");
       
-      String CO2 = String(correctedPPM);
       String firebaseCO2 = "/MQ135/CO2/" + date + "/" + time + "/";
 
       Firebase.pushString(firebaseCO2, CO2);
@@ -174,10 +173,6 @@ void loop(){
       String firebaseCO = "/MQ2/CO/" + date + "/" + time + "/";
       String firebaseSmoke = "/MQ2/Smoke/" + date + "/" + time + "/";
       
-//      Serial.println("LPG Value: " + LPG);
-//      Serial.println("CO Value: " + CO);
-//      Serial.println("Smoke Value: " + Smoke);
-      
       Firebase.pushString(firebaseLPG, LPG);
       Firebase.pushString(firebaseCO, CO);
       Firebase.pushString(firebaseSmoke, Smoke);
@@ -195,16 +190,14 @@ void loop(){
     Serial.print("PM25: ");
     Serial.println(conPM25);
     
-    String firePM25 = String(conPM25);
+    String PM25 = String(conPM25);
     lowpulseoccupancyPM25 = 0;
     starttime = millis();
-    String pm25 = "/DSM501A/PM25/" +  date + "/" + time + "/";
+    String firebasePM25 = "/DSM501A/PM25/" +  date + "/" + time + "/";
     
-    Firebase.pushString(pm25,firePM25);
+    Firebase.pushString(firebasePM25,PM25);
   }
-  // change                    
-//  delay(60000);
-   delay(10000);
+  delay(60000);
 }
 
 // Read multiplexed input
@@ -223,7 +216,7 @@ int readMux(int channel){
   //Read value at the SIG pin
   int val = analogRead(SIG_pin);
 
-  //Return value
+  //Return value at the SIG pin
   return val;
 }
 
