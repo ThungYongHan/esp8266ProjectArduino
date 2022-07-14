@@ -3,7 +3,7 @@
 #include <NTPClient.h>
 #include <WiFiUdp.h>
 
-// Firebase & Wi-Fi Connection
+// Firebase and Wi-Fi connection
 #define FIREBASE_HOST "group-project-esp8266-default-rtdb.asia-southeast1.firebasedatabase.app"
 #define FIREBASE_AUTH "NKH6PeDAccfhdILOG7kcZgVvXOyjWzmm7YVDfvpQ"
 #define WIFI_SSID "POCO X3 Pro"
@@ -182,7 +182,8 @@ void loop(){
   durationPM25 = pulseIn(D5, LOW);
   lowpulseoccupancyPM25 += durationPM25;
   endtime = millis();
-  if ((endtime-starttime) > sampletime_ms) // calculate the ratio only after 30s has passed
+  // Calculate the ratio only after 30s has passed
+  if ((endtime-starttime) > sampletime_ms) 
   {
     float conPM25 = calculateConcentration(lowpulseoccupancyPM25,30);
     Serial.print("PM25: ");
@@ -198,23 +199,23 @@ void loop(){
   delay(60000);
 }
 
-// Read Multiplexed Input
+// Read multiplexed input
 int readMux(int channel){
   int controlPin[] = {s0, s1, s2, s3};
   int muxChannel[2][4]={
-    {0,0,0,0}, //channel 0
-    {1,0,0,0}, //channel 1
+    {0,0,0,0}, //Channel 0
+    {1,0,0,0}, //Channel 1
   };
 
-  //loop through the 4 sig
+  //Loop through the 4 sig
   for(int i = 0; i < 4; i ++){
     digitalWrite(controlPin[i], muxChannel[channel][i]);
   }
 
-  //read the value at the SIG pin
+  //Read value at the SIG pin
   int val = analogRead(SIG_pin);
 
-  //return the value
+  //Return value
   return val;
 }
 
