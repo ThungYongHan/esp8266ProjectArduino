@@ -50,7 +50,6 @@ DHT dht(DHTPIN,DHTTYPE);
 float flttemperature, flthumidity;
 String temperature, humidity;
 
-
 // Internet date and time
 WiFiUDP ntpUDP;
 NTPClient timeClient(ntpUDP, "pool.ntp.org");
