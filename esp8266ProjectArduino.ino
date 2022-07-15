@@ -76,13 +76,13 @@ void setup(){
 
   // Connect to wifi
   WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
-  Serial.print("connecting");
+  Serial.print("Connecting");
   while (WiFi.status() != WL_CONNECTED) {
     Serial.print(".");
     delay(500);
   }
   Serial.println();
-  Serial.print("connected: ");
+  Serial.print("Connected: ");
   Serial.println(WiFi.localIP());
 
   // Necessary to avoid NaN readings
@@ -168,9 +168,9 @@ void loop(){
       Firebase.pushString(firebaseSmoke, Smoke);
     }
   }
-
+  delay(30000);
   // DSM501A
-  durationPM25 = pulseIn(D5, LOW);
+  durationPM25 = pulseIn(DSM501APIN, LOW);
   lowpulseoccupancyPM25 += durationPM25;
   endtime = millis();
   // Calculate the ratio only after 30s has passed
@@ -187,7 +187,7 @@ void loop(){
     
     Firebase.pushString(firebasePM25,PM25);
   }
-  delay(60000);
+  delay(30000);
 }
 
 // Read multiplexed input
@@ -218,12 +218,12 @@ float calculateConcentration(long lowpulseInMicroSeconds, long durationinSeconds
   float concentration = 0.001915 * pow(ratio,2) + 0.09522 * ratio - 0.04884;
   Serial.print("lowpulseoccupancy:");
   Serial.print(lowpulseInMicroSeconds);
-  String firelowpulse = String(lowpulseInMicroSeconds);
+//  String firelowpulse = String(lowpulseInMicroSeconds);
   Serial.print("    ratio:");
   Serial.print(ratio);
-  String fireratio = String (ratio);
+//  String fireratio = String (ratio);
   Serial.print("    Concentration:");
   Serial.println(concentration);
-  String firecon = String (concentration);
+//  String firecon = String (concentration);
   return concentration;
 }
