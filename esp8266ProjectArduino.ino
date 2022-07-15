@@ -29,13 +29,13 @@ String temperature, humidity;
 // RZero: 3.4 | Corrected RZero: 3.8 (rounded off) (28.90 degrees / 79.00 humidity)
 #define RZERO 3.8
 // 1k ohm resistor of MQ-135
-#define RLOAD 1.0
+# define RLOAD 1.0
 MQ135 mq135(ANALOGPIN, RZERO, RLOAD);
 float fltCO2;
 String CO2;
 
 // MQ-2
-#include <MQ2.h>
+#include "MQ2.h"
 MQ2 mq2(ANALOGPIN);
 String LPG, CO, Smoke; 
 
@@ -47,6 +47,7 @@ unsigned long starttime;
 unsigned long endtime;
 unsigned long sampletime_ms = 30000;
 unsigned long lowpulseoccupancyPM25 = 0;
+float fltTimeDifference;
 
 //Multiplexer control pins
 int s0 = D0;
@@ -58,10 +59,6 @@ int s3 = D3;
 int SIG_pin = ANALOGPIN;
 
 void setup(){
-  // DSM501A
-  pinMode(DSM501APIN,INPUT);
-  starttime = millis(); 
-
   // Multiplexer digital pins
   pinMode(s0, OUTPUT); 
   pinMode(s1, OUTPUT); 
@@ -85,17 +82,24 @@ void setup(){
   Serial.print("Connected: ");
   Serial.println(WiFi.localIP());
 
-  // Necessary to avoid NaN readings
+  // Setup pin and set pull timings to avoid NaN readings
   dht11.begin();          
 
-  mq2.begin();
-  
   timeClient.begin();
   // GMT-8
   timeClient.setTimeOffset(28800);
 
   Firebase.begin(FIREBASE_HOST, FIREBASE_AUTH);
-  delay(20000);
+//  MQ-2 and MQ-135 24-hour warm up (perfunctory)
+//  delay(20000);
+
+  // DSM501A
+  pinMode(DSM501APIN,INPUT);
+  starttime = millis(); 
+
+  Serial.println(readMux(1));
+  // Calibrate MQ-2 sensor
+  mq2.begin();
 }
 
 void loop(){
@@ -109,6 +113,7 @@ void loop(){
   String date = String(currentYear) + "-" + String(currentMonth) + "-" + String(monthDay);
   String time = timeClient.getFormattedTime();
 
+  if (date != "1970-1-1"){
    // DHT11
    delay(1000);
    flttemperature = dht11.readTemperature();
@@ -136,16 +141,24 @@ void loop(){
       Serial.print("Value at channel 0 is: ");
       Serial.println(readMux(0));
 
-      fltCO2 = mq135.getCorrectedPPM(flttemperature, flthumidity);
+      //MQ-135 on-the-fly calibration
+      float correctedRZero = mq135.getCorrectedRZero(flttemperature, flthumidity);
+      String correctedRZeroStr = String(correctedRZero);
+      Serial.println("Corrected RZero: " + correctedRZeroStr);
+      MQ135 mq135a(ANALOGPIN, correctedRZero, 1.0);
+      
+      fltCO2 = mq135a.getCorrectedPPM(flttemperature, flthumidity);
+
       CO2 = String(fltCO2);
       
       Serial.print("CO2:");
       Serial.print(CO2);
       Serial.println("ppm");
-      
-      String firebaseCO2 = "/MQ135/CO2/" + date + "/" + time + "/";
 
-      Firebase.pushString(firebaseCO2, CO2);
+      if (!isnan(fltCO2)){
+        String firebaseCO2 = "/MQ135/CO2/" + date + "/" + time + "/";
+        Firebase.pushString(firebaseCO2, CO2);
+      }
     }
     
     // Channel 1
@@ -154,12 +167,19 @@ void loop(){
       delay(1000);
       Serial.print("Value at channel 1 is: ");
       Serial.println(readMux(1));
-      
+      // Calibrate MQ-2 sensor
+//      mq2.begin();
+      delay(1000);
       float* values= mq2.read(true);
+
+      // 5 decimal places
+      LPG = String(values[0],5);
+      CO = String(values[1],5);
+      Smoke = String(values[2],5);
       
-      LPG = String(mq2.readLPG());
-      CO = String(mq2.readCO());
-      Smoke = String(mq2.readSmoke());
+      Serial.println("LPG: " + LPG);
+      Serial.println("CO: " + CO);
+      Serial.println("Smoke: " + Smoke);
       
       String firebaseLPG = "/MQ2/LPG/" + date + "/" + time + "/";
       String firebaseCO = "/MQ2/CO/" + date + "/" + time + "/";
@@ -170,29 +190,44 @@ void loop(){
       Firebase.pushString(firebaseSmoke, Smoke);
     }
   }
-  delay(30000);
+
   // DSM501A
   durationPM25 = pulseIn(DSM501APIN, LOW);
   lowpulseoccupancyPM25 += durationPM25;
+
   endtime = millis();
+  String starttimeStr = String(starttime);
+  String endtimeStr = String(endtime);
+  Serial.println("Start time: " + starttimeStr);
+  Serial.println("End time: " + endtimeStr);
+  String timeDifference = String(endtime-starttime);
+  fltTimeDifference = endtime - starttime;
+  Serial.println("Time difference: " + timeDifference);
+  
   // Calculate the ratio only after 30s has passed
   if ((endtime-starttime) > sampletime_ms) 
   {
-    float conPM25 = calculateConcentration(lowpulseoccupancyPM25,30);
+    float fltPM25 = calculateConcentration(lowpulseoccupancyPM25,30);
     Serial.print("PM25: ");
-    Serial.println(conPM25);
+    Serial.println(fltPM25);
     
-    String PM25 = String(conPM25);
+    String PM25 = String(fltPM25);
     lowpulseoccupancyPM25 = 0;
     starttime = millis();
-    String firebasePM25 = "/DSM501A/PM25/" +  date + "/" + time + "/";
     
-    Firebase.pushString(firebasePM25,PM25);
+    if (fltPM25>0){
+      String firebasePM25 = "/DSM501A/PM25/" +  date + "/" + time + "/";
+      Firebase.pushString(firebasePM25,PM25);
+    }
   }
-  delay(30000);
+  else{
+    Serial.println("Not enough time!");
+  }
+  delay(11000);
+  }
 }
 
-// Read multiplexed input
+// Switch between and read multiplexed input
 int readMux(int channel){
   int controlPin[] = {s0, s1, s2, s3};
   int muxChannel[2][4]={
@@ -214,8 +249,9 @@ int readMux(int channel){
 
 // Calculate DSM501A readings
 float calculateConcentration(long lowpulseInMicroSeconds, long durationinSeconds){
-  //Calculate the ratio
-  float ratio = (lowpulseInMicroSeconds/1000000.0)/30.0*100.0; 
+// Calculate the ratio
+// float ratio = (lowpulseInMicroSeconds/1000000.0)/30.0*100.0; 
+  float ratio = (lowpulseInMicroSeconds/1000000.0)/fltTimeDifference*100.0; 
   //Calculate the mg/m3
   float concentration = 0.001915 * pow(ratio,2) + 0.09522 * ratio - 0.04884;
   Serial.print("lowpulseoccupancy:");
