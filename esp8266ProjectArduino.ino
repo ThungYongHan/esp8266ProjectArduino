@@ -87,6 +87,8 @@ void setup(){
 
   // Necessary to avoid NaN readings
   dht11.begin();          
+
+  mq2.begin();
   
   timeClient.begin();
   // GMT-8
