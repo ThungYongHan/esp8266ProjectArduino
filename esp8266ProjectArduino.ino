@@ -14,6 +14,19 @@ NTPClient timeClient(ntpUDP, "pool.ntp.org");
 
 #define ANALOGPIN A0
 
+// MQ-135
+#include <MQUnifiedsensor.h>
+#define placa "Arduino UNO"
+#define Voltage_Resolution 5
+#define ADC_Bit_Resolution 10 
+#define RatioMQ135CleanAir 3.6//RS / R0 = 3.6 ppm  
+MQUnifiedsensor MQ135(placa, Voltage_Resolution, ADC_Bit_Resolution, ANALOGPIN, "MQ-135");
+
+// MQ-2
+#include "MQ2.h"
+MQ2 mq2(ANALOGPIN);
+String LPG, CO, Smoke; 
+
 //DHT-11
 #include <Adafruit_Sensor.h>
 #include <DHT.h>
@@ -22,22 +35,6 @@ NTPClient timeClient(ntpUDP, "pool.ntp.org");
 DHT dht11(DHT11PIN,DHTTYPE);  
 float flttemperature, flthumidity;
 String temperature, humidity;
-
-// MQ-135
-#include <MQ135.h>
-// MQ-135 calibration
-// RZero: 3.4 | Corrected RZero: 3.8 (rounded off) (28.90 degrees / 79.00 humidity)
-#define RZERO 3.8
-// 1k ohm resistor of MQ-135
-#define RLOAD 1.0
-MQ135 mq135(ANALOGPIN, RZERO, RLOAD);
-float fltCO2, correctedRZero;
-String CO2;
-
-// MQ-2
-#include "MQ2.h"
-MQ2 mq2(ANALOGPIN);
-String LPG, CO, Smoke; 
 
 //DSM501A
 #define DSM501APIN D5
@@ -90,8 +87,6 @@ void setup(){
   timeClient.setTimeOffset(28800);
 
   Firebase.begin(FIREBASE_HOST, FIREBASE_AUTH);
-//  MQ-2 and MQ-135 24-hour warm up (perfunctory)
-//  delay(20000);
 
   // DSM501A
   pinMode(DSM501APIN,INPUT);
@@ -107,11 +102,22 @@ void setup(){
   flthumidity = dht11.readHumidity();
 
   Serial.println(readMux(0));
-  // MQ-135 calibration
-  correctedRZero = mq135.getCorrectedRZero(flttemperature, flthumidity);
-//  correctedRZero = mq135.getRZero();
-  String correctedRZeroStr = String(correctedRZero);
-  Serial.println("Corrected RZero: " + correctedRZeroStr);
+  MQ135.setRegressionMethod(1); 
+  MQ135.init(); 
+  MQ135.setRL(1);
+  Serial.print("Calibrating please wait.");
+  float calcR0 = 0;
+  for(int i = 1; i<=10; i ++)
+  {
+    MQ135.update(); // Update data, the arduino will read the voltage from the analog pin
+    calcR0 += MQ135.calibrate(RatioMQ135CleanAir);
+    Serial.print(".");
+  }
+  MQ135.setR0(calcR0/10);
+  Serial.println("  done!.");
+  
+  if(isinf(calcR0)) {Serial.println("Warning: Conection issue, R0 is infinite (Open circuit detected) please check your wiring and supply"); while(1);}
+  if(calcR0 == 0){Serial.println("Warning: Conection issue found, R0 is zero (Analog pin shorts to ground) please check your wiring and supply"); while(1);}
 }
 
 void loop(){
@@ -152,28 +158,25 @@ void loop(){
       delay(1000);
       Serial.print("Value at channel 0 is: ");
       Serial.println(readMux(0));
-//      correctedRZero = mq135.getCorrectedRZero(flttemperature, flthumidity);
-      String correctedRZeroStr = String(correctedRZero);
-      Serial.println("Corrected RZero: " + correctedRZeroStr);
-//      
+      MQ135.update();
 
-      MQ135 mq135a(ANALOGPIN, correctedRZero, RLOAD);
-//        MQ135 mq135a(ANALOGPIN, 3.8, RLOAD);
-//      MQ135 mq135a(ANALOGPIN, correctedRZero, RLOAD);
-//        MQ135 mq135a(ANALOGPIN, 3.21, RLOAD);
-
-//      fltCO2 = mq135a.getCorrectedPPM(flttemperature, flthumidity);
-      fltCO2 = mq135a.getPPM();
-      CO2 = String(fltCO2);
+      // Calibration curves provided by MQUnified sensor library example
+      MQ135.setA(77.255); MQ135.setB(-3.18); 
+      float Alcohol = MQ135.readSensor(); 
+    
+      MQ135.setA(44.947); MQ135.setB(-3.445); 
+      float Toluen = MQ135.readSensor(); 
       
-      Serial.print("CO2:");
-      Serial.print(CO2);
-      Serial.println("ppm");
-
-      if (!isnan(fltCO2)){
-        String firebaseCO2 = "/MQ135/CO2/" + date + "/" + time + "/";
-        Firebase.pushString(firebaseCO2, CO2);
-      }
+      MQ135.setA(102.2 ); MQ135.setB(-2.473); 
+      float NH4 = MQ135.readSensor(); 
+    
+      MQ135.setA(34.668); MQ135.setB(-3.369); 
+      float Aceton = MQ135.readSensor(); 
+      
+      Serial.print("Alcohol: "); Serial.println(Alcohol);
+      Serial.print("Toluen: "); Serial.println(Toluen); 
+      Serial.print("Ammonia: "); Serial.println(NH4); 
+      Serial.print("Acetone: "); Serial.println(Aceton);
     }
     
     // Channel 1
@@ -182,10 +185,9 @@ void loop(){
       delay(1000);
       Serial.print("Value at channel 1 is: ");
       Serial.println(readMux(1));
-      // Calibrate MQ-2 sensor
-//      mq2.begin();
       delay(1000);
-      float* values= mq2.read(true);
+      // Do not print out in prefined manner
+      float* values= mq2.read(false);
 
       // 5 decimal places
       LPG = String(values[0],5);
@@ -238,7 +240,6 @@ void loop(){
   else{
     Serial.println("Not enough time!");
   }
-//  delay(11000);
   delay(1000);
   }
 }
