@@ -29,9 +29,9 @@ String temperature, humidity;
 // RZero: 3.4 | Corrected RZero: 3.8 (rounded off) (28.90 degrees / 79.00 humidity)
 #define RZERO 3.8
 // 1k ohm resistor of MQ-135
-# define RLOAD 1.0
+#define RLOAD 1.0
 MQ135 mq135(ANALOGPIN, RZERO, RLOAD);
-float fltCO2;
+float fltCO2, correctedRZero;
 String CO2;
 
 // MQ-2
@@ -100,6 +100,18 @@ void setup(){
   Serial.println(readMux(1));
   // Calibrate MQ-2 sensor
   mq2.begin();
+
+  // DHT11
+  delay(1000);
+  flttemperature = dht11.readTemperature();
+  flthumidity = dht11.readHumidity();
+
+  Serial.println(readMux(0));
+  // MQ-135 calibration
+  correctedRZero = mq135.getCorrectedRZero(flttemperature, flthumidity);
+//  correctedRZero = mq135.getRZero();
+  String correctedRZeroStr = String(correctedRZero);
+  Serial.println("Corrected RZero: " + correctedRZeroStr);
 }
 
 void loop(){
@@ -140,15 +152,18 @@ void loop(){
       delay(1000);
       Serial.print("Value at channel 0 is: ");
       Serial.println(readMux(0));
-
-      //MQ-135 on-the-fly calibration
-      float correctedRZero = mq135.getCorrectedRZero(flttemperature, flthumidity);
+//      correctedRZero = mq135.getCorrectedRZero(flttemperature, flthumidity);
       String correctedRZeroStr = String(correctedRZero);
       Serial.println("Corrected RZero: " + correctedRZeroStr);
-      MQ135 mq135a(ANALOGPIN, correctedRZero, 1.0);
-      
-      fltCO2 = mq135a.getCorrectedPPM(flttemperature, flthumidity);
+//      
 
+      MQ135 mq135a(ANALOGPIN, correctedRZero, RLOAD);
+//        MQ135 mq135a(ANALOGPIN, 3.8, RLOAD);
+//      MQ135 mq135a(ANALOGPIN, correctedRZero, RLOAD);
+//        MQ135 mq135a(ANALOGPIN, 3.21, RLOAD);
+
+//      fltCO2 = mq135a.getCorrectedPPM(flttemperature, flthumidity);
+      fltCO2 = mq135a.getPPM();
       CO2 = String(fltCO2);
       
       Serial.print("CO2:");
@@ -223,7 +238,8 @@ void loop(){
   else{
     Serial.println("Not enough time!");
   }
-  delay(11000);
+//  delay(11000);
+  delay(1000);
   }
 }
 
