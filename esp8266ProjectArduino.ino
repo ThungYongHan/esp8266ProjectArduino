@@ -23,12 +23,12 @@ NTPClient timeClient(ntpUDP, "pool.ntp.org");
 #define RatioMQ135CleanAir 3.6 
 MQUnifiedsensor MQ135(placa, Voltage_Resolution, ADC_Bit_Resolution, ANALOGPIN, "MQ-135");
 float fltAlcohol, fltAcetone;
-String Alcohol, Acetone;
+String alcohol, acetone;
 
 // MQ-2
 #include "MQ2.h"
 MQ2 mq2(ANALOGPIN);
-String LPG, CO, Smoke; 
+String LPG, CO;
 
 //DHT-11
 #include <Adafruit_Sensor.h>
@@ -183,14 +183,14 @@ void loop(){
       Alcohol = String(fltAlcohol, 1);
       Acetone = String(fltAcetone, 1);
       
-      Serial.println("Alcohol: " + Alcohol);
-      Serial.println("Acetone: " + Acetone);
+      Serial.println("Alcohol: " + alcohol);
+      Serial.println("Acetone: " + acetone);
 
       String firebaseAlcohol = "/MQ135/Alcohol/" + date + "/" + time + "/";
       String firebaseAcetone = "/MQ135/Acetone/" + date + "/" + time + "/";
 
-      Firebase.pushString(firebaseAlcohol, Alcohol);
-      Firebase.pushString(firebaseAcetone, Acetone);
+      Firebase.pushString(firebaseAlcohol, alcohol);
+      Firebase.pushString(firebaseAcetone, acetone);
     }
     
     // Channel 1
