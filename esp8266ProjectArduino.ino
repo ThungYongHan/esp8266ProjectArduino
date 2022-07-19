@@ -19,8 +19,11 @@ NTPClient timeClient(ntpUDP, "pool.ntp.org");
 #define placa "Arduino UNO"
 #define Voltage_Resolution 5
 #define ADC_Bit_Resolution 10 
-#define RatioMQ135CleanAir 3.6//RS / R0 = 3.6 ppm  
+//RS / R0 = 3.6 ppm 
+#define RatioMQ135CleanAir 3.6 
 MQUnifiedsensor MQ135(placa, Voltage_Resolution, ADC_Bit_Resolution, ANALOGPIN, "MQ-135");
+float fltAlcohol, fltAcetone;
+String Alcohol, Acetone;
 
 // MQ-2
 #include "MQ2.h"
@@ -33,7 +36,7 @@ String LPG, CO, Smoke;
 #define DHT11PIN D4
 #define DHTTYPE DHT11
 DHT dht11(DHT11PIN,DHTTYPE);  
-float flttemperature, flthumidity;
+float fltTemperature, fltHumidity;
 String temperature, humidity;
 
 //DSM501A
@@ -68,7 +71,7 @@ void setup(){
   
   Serial.begin(9600);
 
-  // Connect to wifi
+  // Connect to Wi-Fi
   WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
   Serial.print("Connecting");
   while (WiFi.status() != WL_CONNECTED) {
@@ -82,8 +85,8 @@ void setup(){
   // Setup pin and set pull timings to avoid NaN readings
   dht11.begin();          
 
+  // GMT-8 timezone
   timeClient.begin();
-  // GMT-8
   timeClient.setTimeOffset(28800);
 
   Firebase.begin(FIREBASE_HOST, FIREBASE_AUTH);
@@ -91,33 +94,42 @@ void setup(){
   // DSM501A
   pinMode(DSM501APIN,INPUT);
   starttime = millis(); 
-
-  Serial.println(readMux(1));
+  
   // Calibrate MQ-2 sensor
+  Serial.println(readMux(1));
+  Serial.println("Calibrating MQ-2");
   mq2.begin();
+  Serial.println("MQ-2 calibration complete");
 
   // DHT11
   delay(1000);
-  flttemperature = dht11.readTemperature();
-  flthumidity = dht11.readHumidity();
+  fltTemperature = dht11.readTemperature();
+  fltHumidity = dht11.readHumidity();
 
+  // Calibrate MQ-135 sensor
   Serial.println(readMux(0));
   MQ135.setRegressionMethod(1); 
   MQ135.init(); 
   MQ135.setRL(1);
-  Serial.print("Calibrating please wait.");
+  Serial.println("Calibrating MQ-135");
   float calcR0 = 0;
   for(int i = 1; i<=10; i ++)
   {
-    MQ135.update(); // Update data, the arduino will read the voltage from the analog pin
+    // Update data, the arduino will read the voltage from the analog pin
+    MQ135.update(); 
     calcR0 += MQ135.calibrate(RatioMQ135CleanAir);
-    Serial.print(".");
   }
   MQ135.setR0(calcR0/10);
-  Serial.println("  done!.");
-  
-  if(isinf(calcR0)) {Serial.println("Warning: Conection issue, R0 is infinite (Open circuit detected) please check your wiring and supply"); while(1);}
-  if(calcR0 == 0){Serial.println("Warning: Conection issue found, R0 is zero (Analog pin shorts to ground) please check your wiring and supply"); while(1);}
+  Serial.println("MQ-135 calibration complete");
+
+  if(isinf(calcR0)) {
+    Serial.println("Warning: Conection issue, R0 is infinite (Open circuit detected) please check your wiring and supply"); 
+    while(1);
+    }
+  if(calcR0 == 0){
+    Serial.println("Warning: Conection issue found, R0 is zero (Analog pin shorts to ground) please check your wiring and supply"); 
+    while(1);
+    }
 }
 
 void loop(){
@@ -134,19 +146,19 @@ void loop(){
   if (date != "1970-1-1"){
    // DHT11
    delay(1000);
-   flttemperature = dht11.readTemperature();
-   flthumidity = dht11.readHumidity();
-   temperature = String(flttemperature);
-   humidity = String(flthumidity);
+   fltTemperature = dht11.readTemperature();
+   fltHumidity = dht11.readHumidity();
+   temperature = String(fltTemperature);
+   humidity = String(fltHumidity);
 
    Serial.println("Temperature: " + temperature);
    Serial.println("Humidity: " + humidity); 
                   
-   if(!isnan(flttemperature)){
+   if(!isnan(fltTemperature)){
        String firebaseTemperature = "/DHT11/Temperature/" + date + "/" + time + "/";
        Firebase.pushString(firebaseTemperature,temperature);        
    }             
-   if(!isnan(flthumidity)){
+   if(!isnan(fltHumidity)){
       String firebaseHumidity = "/DHT11/Humidity/" + date + "/" + time + "/";
       Firebase.pushString(firebaseHumidity, humidity);  
    }
@@ -160,23 +172,25 @@ void loop(){
       Serial.println(readMux(0));
       MQ135.update();
 
-      // Calibration curves provided by MQUnified sensor library example
+      // Calibration curves provided by MQUnifiedSensor.h library example
       MQ135.setA(77.255); MQ135.setB(-3.18); 
-      float Alcohol = MQ135.readSensor(); 
-    
-      MQ135.setA(44.947); MQ135.setB(-3.445); 
-      float Toluen = MQ135.readSensor(); 
-      
-      MQ135.setA(102.2 ); MQ135.setB(-2.473); 
-      float NH4 = MQ135.readSensor(); 
+      fltAlcohol = MQ135.readSensor(); 
     
       MQ135.setA(34.668); MQ135.setB(-3.369); 
-      float Aceton = MQ135.readSensor(); 
+      fltAcetone = MQ135.readSensor(); 
       
-      Serial.print("Alcohol: "); Serial.println(Alcohol);
-      Serial.print("Toluen: "); Serial.println(Toluen); 
-      Serial.print("Ammonia: "); Serial.println(NH4); 
-      Serial.print("Acetone: "); Serial.println(Aceton);
+      // 1 decimal place
+      Alcohol = String(fltAlcohol, 1);
+      Acetone = String(fltAcetone, 1);
+      
+      Serial.println("Alcohol: " + Alcohol);
+      Serial.println("Acetone: " + Acetone);
+
+      String firebaseAlcohol = "/MQ135/Alcohol/" + date + "/" + time + "/";
+      String firebaseAcetone = "/MQ135/Acetone/" + date + "/" + time + "/";
+
+      Firebase.pushString(firebaseAlcohol, Alcohol);
+      Firebase.pushString(firebaseAcetone, Acetone);
     }
     
     // Channel 1
@@ -185,26 +199,21 @@ void loop(){
       delay(1000);
       Serial.print("Value at channel 1 is: ");
       Serial.println(readMux(1));
-      delay(1000);
-      // Do not print out in prefined manner
+      // Do not print out in prefined manner provided by MQ2.h library example
       float* values= mq2.read(false);
 
-      // 5 decimal places
-      LPG = String(values[0],5);
-      CO = String(values[1],5);
-      Smoke = String(values[2],5);
+      // 1 decimal place
+      LPG = String(values[0], 1);
+      CO = String(values[1], 1);
       
       Serial.println("LPG: " + LPG);
       Serial.println("CO: " + CO);
-      Serial.println("Smoke: " + Smoke);
       
       String firebaseLPG = "/MQ2/LPG/" + date + "/" + time + "/";
       String firebaseCO = "/MQ2/CO/" + date + "/" + time + "/";
-      String firebaseSmoke = "/MQ2/Smoke/" + date + "/" + time + "/";
       
       Firebase.pushString(firebaseLPG, LPG);
       Firebase.pushString(firebaseCO, CO);
-      Firebase.pushString(firebaseSmoke, Smoke);
     }
   }
 
