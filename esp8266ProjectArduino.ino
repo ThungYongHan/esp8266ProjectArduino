@@ -180,8 +180,8 @@ void loop(){
       fltAcetone = MQ135.readSensor(); 
       
       // 1 decimal place
-      Alcohol = String(fltAlcohol, 1);
-      Acetone = String(fltAcetone, 1);
+      alcohol = String(fltAlcohol, 1);
+      acetone = String(fltAcetone, 1);
       
       Serial.println("Alcohol: " + alcohol);
       Serial.println("Acetone: " + acetone);
