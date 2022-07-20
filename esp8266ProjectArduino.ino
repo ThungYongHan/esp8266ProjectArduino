@@ -90,8 +90,8 @@ void setup(){
   dht11.begin();          
 
   // Calibrate MQ-135 sensor
-  delay(1000);
   Serial.println(readMux(0));
+  delay(1000);
   Serial.println("Calibrating MQ-135");
   MQ135.setRegressionMethod(1); 
   MQ135.init(); 
@@ -114,8 +114,8 @@ void setup(){
   Serial.println("MQ-135 calibration complete");
     
   // Calibrate MQ-2 sensor
-  delay(1000);
   Serial.println(readMux(1));
+  delay(1000);
   Serial.println("Calibrating MQ-2");
   mq2.begin();
   Serial.println("MQ-2 calibration complete");
@@ -163,9 +163,9 @@ void loop(){
     // Channel 0
     if (i == 0){
       //MQ-135
-      delay(1000);
       Serial.print("Value at channel 0 is: ");
       Serial.println(readMux(0));
+      delay(1000);
       MQ135.update();
 
       // Calculation curves provided by MQUnifiedSensor.h library example
@@ -192,9 +192,9 @@ void loop(){
     // Channel 1
     if (i == 1){
       //MQ-2
-      delay(1000);
       Serial.print("Value at channel 1 is: ");
       Serial.println(readMux(1));
+      delay(1000);
       // Do not print out in prefined manner provided by MQ2.h library example
       float* values= mq2.read(false);
 
