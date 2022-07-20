@@ -211,7 +211,6 @@ void loop(){
     }
   }
 
-    // Add up DSM501A pulse data often
     durationPM2_5 = pulseIn(PM2_5PIN, LOW);
     lowpulseoccupancyPM2_5 += durationPM2_5;
     
