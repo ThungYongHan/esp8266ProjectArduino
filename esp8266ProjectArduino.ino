@@ -19,7 +19,6 @@ NTPClient timeClient(ntpUDP, "pool.ntp.org");
 #define placa "Arduino UNO"
 #define Voltage_Resolution 5
 #define ADC_Bit_Resolution 10 
-//RS / R0 = 3.6 ppm 
 #define RatioMQ135CleanAir 3.6 
 MQUnifiedsensor MQ135(placa, Voltage_Resolution, ADC_Bit_Resolution, ANALOGPIN, "MQ-135");
 float fltAlcohol, fltAcetone;
@@ -40,13 +39,13 @@ float fltTemperature, fltHumidity;
 String temperature, humidity;
 
 //DSM501A
-#define DSM501APIN D5
+#define PM2_5PIN D5
 byte buff[2];
-unsigned long durationPM25;
+unsigned long durationPM2_5;
 unsigned long starttime;
 unsigned long endtime;
 unsigned long sampletime_ms = 30000;
-unsigned long lowpulseoccupancyPM25 = 0;
+unsigned long lowpulseoccupancyPM2_5 = 0;
 float fltTimeDifference;
 
 //Multiplexer control pins
@@ -71,7 +70,7 @@ void setup(){
   
   Serial.begin(9600);
 
-  // Connect to Wi-Fi
+  // Connect to Wi-Fi and Firebase Realtime Database
   WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
   Serial.print("Connecting");
   while (WiFi.status() != WL_CONNECTED) {
@@ -81,19 +80,14 @@ void setup(){
   Serial.println();
   Serial.print("Connected: ");
   Serial.println(WiFi.localIP());
-
-  // Setup pin and set pull timings to avoid NaN readings
+  Firebase.begin(FIREBASE_HOST, FIREBASE_AUTH);
+  
+  // Setup DHT11 pin and set pull timings to avoid NaN readings
   dht11.begin();          
 
   // GMT-8 timezone
   timeClient.begin();
   timeClient.setTimeOffset(28800);
-
-  Firebase.begin(FIREBASE_HOST, FIREBASE_AUTH);
-
-  // DSM501A
-  pinMode(DSM501APIN,INPUT);
-  starttime = millis(); 
   
   // Calibrate MQ-2 sensor
   Serial.println(readMux(1));
@@ -101,35 +95,32 @@ void setup(){
   mq2.begin();
   Serial.println("MQ-2 calibration complete");
 
-  // DHT11
-  delay(1000);
-  fltTemperature = dht11.readTemperature();
-  fltHumidity = dht11.readHumidity();
-
   // Calibrate MQ-135 sensor
   Serial.println(readMux(0));
+  Serial.println("Calibrating MQ-135");
   MQ135.setRegressionMethod(1); 
   MQ135.init(); 
   MQ135.setRL(1);
-  Serial.println("Calibrating MQ-135");
   float calcR0 = 0;
   for(int i = 1; i<=10; i ++)
   {
-    // Update data, the arduino will read the voltage from the analog pin
     MQ135.update(); 
     calcR0 += MQ135.calibrate(RatioMQ135CleanAir);
   }
+  if(isinf(calcR0)) {
+    Serial.println("Warning: Connection issue, R0 is infinite"); 
+    while(1);
+  }
+  if(calcR0 == 0){
+    Serial.println("Warning: Connection issue, R0 is zero"); 
+    while(1);
+  }
   MQ135.setR0(calcR0/10);
   Serial.println("MQ-135 calibration complete");
-
-  if(isinf(calcR0)) {
-    Serial.println("Warning: Conection issue, R0 is infinite (Open circuit detected) please check your wiring and supply"); 
-    while(1);
-    }
-  if(calcR0 == 0){
-    Serial.println("Warning: Conection issue found, R0 is zero (Analog pin shorts to ground) please check your wiring and supply"); 
-    while(1);
-    }
+  
+  // Begin DSM501A start timer count
+  pinMode(PM2_5PIN,INPUT);
+  starttime = millis(); 
 }
 
 void loop(){
@@ -143,7 +134,12 @@ void loop(){
   String date = String(currentYear) + "-" + String(currentMonth) + "-" + String(monthDay);
   String time = timeClient.getFormattedTime();
 
+  // Prevent 1970-1-1 epoch date from being added to Firebase Realtime Database when Wi-Fi connection is unstable
   if (date != "1970-1-1"){
+   // Add up DSM501A pulse data often
+   durationPM2_5 = pulseIn(PM2_5PIN, LOW);
+   lowpulseoccupancyPM2_5 += durationPM2_5;
+    
    // DHT11
    delay(1000);
    fltTemperature = dht11.readTemperature();
@@ -153,7 +149,8 @@ void loop(){
 
    Serial.println("Temperature: " + temperature);
    Serial.println("Humidity: " + humidity); 
-                  
+
+   // Only send temperature and humidity data to Firebase Realtime Databse if not NaN
    if(!isnan(fltTemperature)){
        String firebaseTemperature = "/DHT11/Temperature/" + date + "/" + time + "/";
        Firebase.pushString(firebaseTemperature,temperature);        
@@ -163,7 +160,14 @@ void loop(){
       Firebase.pushString(firebaseHumidity, humidity);  
    }
 
+   durationPM2_5 = pulseIn(PM2_5PIN, LOW);
+   lowpulseoccupancyPM2_5 += durationPM2_5;
+
   for(int i = 0; i < 2; i ++){
+   // Add up DSM501A pulse data often
+   durationPM2_5 = pulseIn(PM2_5PIN, LOW);
+   lowpulseoccupancyPM2_5 += durationPM2_5;
+   
     // Channel 0
     if (i == 0){
       //MQ-135
@@ -172,7 +176,7 @@ void loop(){
       Serial.println(readMux(0));
       MQ135.update();
 
-      // Calibration curves provided by MQUnifiedSensor.h library example
+      // Calculation curves provided by MQUnifiedSensor.h library example
       MQ135.setA(77.255); MQ135.setB(-3.18); 
       fltAlcohol = MQ135.readSensor(); 
     
@@ -191,6 +195,10 @@ void loop(){
 
       Firebase.pushString(firebaseAlcohol, alcohol);
       Firebase.pushString(firebaseAcetone, acetone);
+
+      // Add up DSM501A pulse data often
+      durationPM2_5 = pulseIn(PM2_5PIN, LOW);
+      lowpulseoccupancyPM2_5 += durationPM2_5;
     }
     
     // Channel 1
@@ -214,42 +222,46 @@ void loop(){
       
       Firebase.pushString(firebaseLPG, LPG);
       Firebase.pushString(firebaseCO, CO);
+
+      // Add up DSM501A pulse data often
+      durationPM2_5 = pulseIn(PM2_5PIN, LOW);
+      lowpulseoccupancyPM2_5 += durationPM2_5;
     }
   }
 
-  // DSM501A
-  durationPM25 = pulseIn(DSM501APIN, LOW);
-  lowpulseoccupancyPM25 += durationPM25;
+    // Add up DSM501A pulse data often
+    durationPM2_5 = pulseIn(PM2_5PIN, LOW);
+    lowpulseoccupancyPM2_5 += durationPM2_5;
+    
+    endtime = millis();
+    Serial.print("LowpulseoccupancyPM2.5: ");
+    Serial.println(lowpulseoccupancyPM2_5);
+    
+    // Calculate the ratio only after 30 seconds have passed
+    if ((endtime-starttime) > sampletime_ms) 
+    {
+      float fltPM2_5 = calculateConcentration(lowpulseoccupancyPM2_5,30);
+      Serial.print("PM2.5: ");
+      Serial.println(fltPM2_5);
+      
+      String PM2_5 = String(fltPM2_5);
+      // Reset DSM501A added-up pulse data
+      lowpulseoccupancyPM2_5 = 0;
+      starttime = millis();
 
-  endtime = millis();
-  String starttimeStr = String(starttime);
-  String endtimeStr = String(endtime);
-  Serial.println("Start time: " + starttimeStr);
-  Serial.println("End time: " + endtimeStr);
-  String timeDifference = String(endtime-starttime);
-  fltTimeDifference = endtime - starttime;
-  Serial.println("Time difference: " + timeDifference);
-  
-  // Calculate the ratio only after 30s has passed
-  if ((endtime-starttime) > sampletime_ms) 
-  {
-    float fltPM25 = calculateConcentration(lowpulseoccupancyPM25,30);
-    Serial.print("PM25: ");
-    Serial.println(fltPM25);
-    
-    String PM25 = String(fltPM25);
-    lowpulseoccupancyPM25 = 0;
-    starttime = millis();
-    
-    if (fltPM25>0){
-      String firebasePM25 = "/DSM501A/PM25/" +  date + "/" + time + "/";
-      Firebase.pushString(firebasePM25,PM25);
+      if (fltPM2_5 >= 0.00){
+        String firebasePM2_5 = "/DSM501A/PM25/" +  date + "/" + time + "/";
+        Firebase.pushString(firebasePM2_5, PM2_5);
+      }
+       // Send 0.00 mg/3 as DSM501A PM2.5 data if under 0.00 mg/m3
+      else{
+        String firebasePM2_5 = "/DSM501A/PM25/" +  date + "/" + time + "/";
+        Firebase.pushString(firebasePM2_5, "0.00");
+      }
     }
-  }
-  else{
-    Serial.println("Not enough time!");
-  }
-  delay(1000);
+    else{
+      Serial.println("Not over 30 seconds yet!");
+    }
   }
 }
 
@@ -276,18 +288,14 @@ int readMux(int channel){
 // Calculate DSM501A readings
 float calculateConcentration(long lowpulseInMicroSeconds, long durationinSeconds){
 // Calculate the ratio
-// float ratio = (lowpulseInMicroSeconds/1000000.0)/30.0*100.0; 
-  float ratio = (lowpulseInMicroSeconds/1000000.0)/fltTimeDifference*100.0; 
+  float ratio = (lowpulseInMicroSeconds/1000000.0)/30.0*100.0;
   //Calculate the mg/m3
   float concentration = 0.001915 * pow(ratio,2) + 0.09522 * ratio - 0.04884;
   Serial.print("lowpulseoccupancy:");
   Serial.print(lowpulseInMicroSeconds);
-//  String firelowpulse = String(lowpulseInMicroSeconds);
   Serial.print("    ratio:");
   Serial.print(ratio);
-//  String fireratio = String (ratio);
   Serial.print("    Concentration:");
   Serial.println(concentration);
-//  String firecon = String (concentration);
   return concentration;
 }
