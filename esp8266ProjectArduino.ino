@@ -136,9 +136,6 @@ void loop(){
 
   // Prevent 1970-1-1 epoch date from being added to Firebase Realtime Database when Wi-Fi connection is unstable
   if (date != "1970-1-1"){
-   // Add up DSM501A pulse data often
-   durationPM2_5 = pulseIn(PM2_5PIN, LOW);
-   lowpulseoccupancyPM2_5 += durationPM2_5;
     
    // DHT11
    delay(1000);
@@ -160,14 +157,7 @@ void loop(){
       Firebase.pushString(firebaseHumidity, humidity);  
    }
 
-   durationPM2_5 = pulseIn(PM2_5PIN, LOW);
-   lowpulseoccupancyPM2_5 += durationPM2_5;
-
   for(int i = 0; i < 2; i ++){
-   // Add up DSM501A pulse data often
-   durationPM2_5 = pulseIn(PM2_5PIN, LOW);
-   lowpulseoccupancyPM2_5 += durationPM2_5;
-   
     // Channel 0
     if (i == 0){
       //MQ-135
@@ -195,10 +185,6 @@ void loop(){
 
       Firebase.pushString(firebaseAlcohol, alcohol);
       Firebase.pushString(firebaseAcetone, acetone);
-
-      // Add up DSM501A pulse data often
-      durationPM2_5 = pulseIn(PM2_5PIN, LOW);
-      lowpulseoccupancyPM2_5 += durationPM2_5;
     }
     
     // Channel 1
@@ -222,10 +208,6 @@ void loop(){
       
       Firebase.pushString(firebaseLPG, LPG);
       Firebase.pushString(firebaseCO, CO);
-
-      // Add up DSM501A pulse data often
-      durationPM2_5 = pulseIn(PM2_5PIN, LOW);
-      lowpulseoccupancyPM2_5 += durationPM2_5;
     }
   }
 
@@ -241,10 +223,12 @@ void loop(){
     if ((endtime-starttime) > sampletime_ms) 
     {
       float fltPM2_5 = calculateConcentration(lowpulseoccupancyPM2_5,30);
-      Serial.print("PM2.5: ");
+      // convert mg/m3 to µg/m3
+      fltPM2_5 = fltPM2_5 * 1000;
+      Serial.print("PM2.5 µg/m3: ");
       Serial.println(fltPM2_5);
-      
       String PM2_5 = String(fltPM2_5);
+      
       // Reset DSM501A added-up pulse data
       lowpulseoccupancyPM2_5 = 0;
       starttime = millis();
@@ -253,7 +237,7 @@ void loop(){
         String firebasePM2_5 = "/DSM501A/PM25/" +  date + "/" + time + "/";
         Firebase.pushString(firebasePM2_5, PM2_5);
       }
-       // Send 0.00 mg/3 as DSM501A PM2.5 data if under 0.00 mg/m3
+       // Send 0.00 µg/m3 as DSM501A PM2.5 data if under 0.00 µg/m3
       else{
         String firebasePM2_5 = "/DSM501A/PM25/" +  date + "/" + time + "/";
         Firebase.pushString(firebasePM2_5, "0.00");
