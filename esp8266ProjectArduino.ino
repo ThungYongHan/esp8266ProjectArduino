@@ -81,21 +81,16 @@ void setup(){
   Serial.print("Connected: ");
   Serial.println(WiFi.localIP());
   Firebase.begin(FIREBASE_HOST, FIREBASE_AUTH);
-  
-  // Setup DHT11 pin and set pull timings to avoid NaN readings
-  dht11.begin();          
 
   // GMT-8 timezone
   timeClient.begin();
   timeClient.setTimeOffset(28800);
-  
-  // Calibrate MQ-2 sensor
-  Serial.println(readMux(1));
-  Serial.println("Calibrating MQ-2");
-  mq2.begin();
-  Serial.println("MQ-2 calibration complete");
+
+  // Setup DHT11 pin and set pull timings to avoid NaN readings
+  dht11.begin();          
 
   // Calibrate MQ-135 sensor
+  delay(1000);
   Serial.println(readMux(0));
   Serial.println("Calibrating MQ-135");
   MQ135.setRegressionMethod(1); 
@@ -117,6 +112,13 @@ void setup(){
   }
   MQ135.setR0(calcR0/10);
   Serial.println("MQ-135 calibration complete");
+    
+  // Calibrate MQ-2 sensor
+  delay(1000);
+  Serial.println(readMux(1));
+  Serial.println("Calibrating MQ-2");
+  mq2.begin();
+  Serial.println("MQ-2 calibration complete");
   
   // Begin DSM501A start timer count
   pinMode(PM2_5PIN,INPUT);
