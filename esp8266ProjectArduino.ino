@@ -25,8 +25,9 @@ float fltAlcohol, fltAcetone;
 String alcohol, acetone;
 
 // MQ-2
-#include "MQ2.h"
-MQ2 mq2(ANALOGPIN);
+#define RatioMQ2CleanAir 9.83
+MQUnifiedsensor MQ2(placa, Voltage_Resolution, ADC_Bit_Resolution, ANALOGPIN, "MQ-2");
+float fltLPG, fltCO;
 String LPG, CO;
 
 //DHT-11
@@ -96,28 +97,45 @@ void setup(){
   MQ135.setRegressionMethod(1); 
   MQ135.init(); 
   MQ135.setRL(1);
-  float calcR0 = 0;
+  float calcR0MQ135 = 0;
   for(int i = 1; i<=10; i ++)
   {
     MQ135.update(); 
-    calcR0 += MQ135.calibrate(RatioMQ135CleanAir);
+    calcR0MQ135 += MQ135.calibrate(RatioMQ135CleanAir);
   }
-  if(isinf(calcR0)) {
-    Serial.println("Warning: Connection issue, R0 is infinite"); 
+  if(isinf(calcR0MQ135)) {
+    Serial.println("Warning: Connection issue, R0 for MQ-135 is infinite"); 
     while(1);
   }
-  if(calcR0 == 0){
-    Serial.println("Warning: Connection issue, R0 is zero"); 
+  if(calcR0MQ135 == 0){
+    Serial.println("Warning: Connection issue, R0 for MQ-135 is zero"); 
     while(1);
   }
-  MQ135.setR0(calcR0/10);
+  MQ135.setR0(calcR0MQ135/10);
   Serial.println("MQ-135 calibration complete");
     
   // Calibrate MQ-2 sensor
   Serial.println(readMux(1));
   delay(1000);
   Serial.println("Calibrating MQ-2");
-  mq2.begin();
+  MQ2.setRegressionMethod(1); //_PPM =  a*ratio^b
+  MQ2.init(); 
+  MQ2.setRL(1);
+  float calcR0MQ2 = 0;
+  for(int i = 1; i<=10; i ++)
+  {
+    MQ2.update();
+    calcR0MQ2 += MQ2.calibrate(RatioMQ2CleanAir);
+  }
+  if(isinf(calcR0MQ2)) {
+    Serial.println("Warning: Connection issue, R0 for MQ-2 is infinite"); 
+    while(1);
+  }
+  if(calcR0MQ2 == 0){
+    Serial.println("Warning: Connection issue, R0 for MQ-2 is zero"); 
+    while(1);
+  }
+  MQ2.setR0(calcR0MQ2/10);
   Serial.println("MQ-2 calibration complete");
   
   // Begin DSM501A start timer count
@@ -195,24 +213,32 @@ void loop(){
       Serial.print("Value at channel 1 is: ");
       Serial.println(readMux(1));
       delay(1000);
-      // Do not print out in prefined manner provided by MQ2.h library example
-      float* values= mq2.read(false);
+      MQ2.update();
 
-      // 1 decimal place
-      LPG = String(values[0], 1);
-      CO = String(values[1], 1);
+      // Calculation curves provided by MQUnifiedSensor.h library example
+      MQ2.setA(574.25); MQ2.setB(-2.222); 
+      fltLPG = MQ2.readSensor(); 
+
+      MQ2.setA(36974); MQ135.setB(-3.109); 
+      fltCO = MQ135.readSensor(); 
       
-      Serial.println("LPG: " + LPG);
-      Serial.println("CO: " + CO);
-      
+      Serial.print("LPG: ");
+      Serial.println(fltLPG);
+      Serial.print("CO: ");
+      Serial.println(fltCO);
+
+      LPG = String(fltLPG, 1);
+      CO = String(fltCO, 1);
+
       String firebaseLPG = "/MQ2/LPG/" + date + "/" + time + "/";
       String firebaseCO = "/MQ2/CO/" + date + "/" + time + "/";
-      
+
+      // 1 decimal place
       Firebase.pushString(firebaseLPG, LPG);
       Firebase.pushString(firebaseCO, CO);
     }
   }
-
+    
     durationPM2_5 = pulseIn(PM2_5PIN, LOW);
     lowpulseoccupancyPM2_5 += durationPM2_5;
     
