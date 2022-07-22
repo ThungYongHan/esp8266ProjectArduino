@@ -94,7 +94,9 @@ void setup(){
   Serial.println(readMux(0));
   delay(1000);
   Serial.println("Calibrating MQ-135");
+  // Math model for PPM calculation
   MQ135.setRegressionMethod(1); 
+  // Configure pin as input
   MQ135.init(); 
   // Resistor load of 1k Ohm
   MQ135.setRL(1);
@@ -119,7 +121,9 @@ void setup(){
   Serial.println(readMux(1));
   delay(1000);
   Serial.println("Calibrating MQ-2");
+  // Math model for PPM calculation
   MQ2.setRegressionMethod(1); 
+  // Configure pin as input
   MQ2.init(); 
   // Resistor load of 1k Ohm
   MQ2.setRL(1);
@@ -184,14 +188,16 @@ void loop(){
     if (i == 0){
       //MQ-135
       Serial.print("Value at channel 0 is: ");
+      // Switch to channel 0 of multiplexer
       Serial.println(readMux(0));
       delay(1000);
+      // Read voltage from analog pin
       MQ135.update();
 
-      // Calculation curves provided by MQUnifiedSensor.h library example
+      // Equation models for alcohol and acetone provided by MQUnifiedSensor.h library example
       MQ135.setA(77.255); MQ135.setB(-3.18); 
+      // Read PPM concentrations using provided equation model 
       fltAlcohol = MQ135.readSensor(); 
-    
       MQ135.setA(34.668); MQ135.setB(-3.369); 
       fltAcetone = MQ135.readSensor(); 
       
@@ -213,14 +219,16 @@ void loop(){
     if (i == 1){
       //MQ-2
       Serial.print("Value at channel 1 is: ");
+      // Switch to channel 1 of multiplexer
       Serial.println(readMux(1));
       delay(1000);
+      // Read voltage from analog pin
       MQ2.update();
 
-      // Calculation curves provided by MQUnifiedSensor.h library example
+      // Equation models for LPG and CO provided by MQUnifiedSensor.h library example
       MQ2.setA(574.25); MQ2.setB(-2.222); 
+      // Read PPM concentrations using provided equation model 
       fltLPG = MQ2.readSensor(); 
-
       MQ2.setA(36974); MQ135.setB(-3.109); 
       fltCO = MQ135.readSensor(); 
       
@@ -229,13 +237,13 @@ void loop(){
       Serial.print("CO: ");
       Serial.println(fltCO);
 
+      // 1 decimal place
       LPG = String(fltLPG, 1);
       CO = String(fltCO, 1);
 
       String firebaseLPG = "/MQ2/LPG/" + date + "/" + time + "/";
       String firebaseCO = "/MQ2/CO/" + date + "/" + time + "/";
 
-      // 1 decimal place
       Firebase.pushString(firebaseLPG, LPG);
       Firebase.pushString(firebaseCO, CO);
     }
