@@ -288,7 +288,7 @@ void loop(){
   }
 }
 
-// Switch between and read multiplexed input
+// Switch between multiplexer channels and read multiplexed input
 int readMux(int channel){
   int controlPin[] = {s0, s1, s2, s3};
   int muxChannel[2][4]={
