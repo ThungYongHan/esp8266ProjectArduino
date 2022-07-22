@@ -90,7 +90,7 @@ void setup(){
   // Setup DHT11 pin and set pull timings to avoid NaN readings
   dht11.begin();          
 
-  // Calibrate MQ-135 sensor
+  // Calibrate MQ-135 sensor according to MQUnifiedSensor.h library example
   Serial.println(readMux(0));
   delay(1000);
   Serial.println("Calibrating MQ-135");
@@ -115,7 +115,7 @@ void setup(){
   MQ135.setR0(calcR0MQ135/10);
   Serial.println("MQ-135 calibration complete");
     
-  // Calibrate MQ-2 sensor
+  // Calibrate MQ-2 sensor according to MQUnifiedSensor.h library example
   Serial.println(readMux(1));
   delay(1000);
   Serial.println("Calibrating MQ-2");
