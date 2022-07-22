@@ -96,6 +96,7 @@ void setup(){
   Serial.println("Calibrating MQ-135");
   MQ135.setRegressionMethod(1); 
   MQ135.init(); 
+  // Resistor load of 1k Ohm
   MQ135.setRL(1);
   float calcR0MQ135 = 0;
   for(int i = 1; i<=10; i ++)
@@ -118,8 +119,9 @@ void setup(){
   Serial.println(readMux(1));
   delay(1000);
   Serial.println("Calibrating MQ-2");
-  MQ2.setRegressionMethod(1); //_PPM =  a*ratio^b
+  MQ2.setRegressionMethod(1); 
   MQ2.init(); 
+  // Resistor load of 1k Ohm
   MQ2.setRL(1);
   float calcR0MQ2 = 0;
   for(int i = 1; i<=10; i ++)
