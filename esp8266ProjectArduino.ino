@@ -91,7 +91,7 @@ void setup(){
   dht11.begin();          
 
   // Switch to channel 0 of multiplexer 
-  // and calibrate MQ-2 sensor according to MQUnifiedSensor.h library example
+  // and calibrate MQ-135 sensor according to MQUnifiedSensor.h library example
   Serial.println(readMux(0));
   delay(1000);
   Serial.println("Calibrating MQ-135");
